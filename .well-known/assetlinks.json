@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "io.github.abdelhamid2007.tresor",
+            "sha256_cert_fingerprints": [
+                "B4:D1:D1:76:4D:69:09:6C:78:51:C1:F9:1C:E1:FD:53:28:1F:6D:C2:53:92:80:4F:7E:F9:98:23:E3:8B:C7:65"
+            ]
+        }
+    }
+]
