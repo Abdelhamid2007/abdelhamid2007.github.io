@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Trésor — Test dossier</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#0f1b2a;--mut:#667385;--brand:#0c7a5f;--ok:#0c7a5f;--ko:#c0392b;--line:#e3e8ee;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#07131a;--card:#0e1f28;--ink:#e8eef3;--mut:#93a3b3;--brand:#2fd3a5;--ok:#2fd3a5;--ko:#ff7b6b;--line:#1d323d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:linear-gradient(140deg,#0b2530 0%,#0d4a4a 48%,#11876a 100%);color:#fff;padding:24px 16px 28px}
+header div,main{max-width:640px;margin:0 auto}h1{font-size:22px;margin:4px 0 0}header b{font-size:14px;opacity:.85}
+main{padding:0 16px 48px}.card{background:var(--card);border-radius:18px;padding:14px 16px;margin-top:14px;box-shadow:0 6px 20px rgba(15,27,42,.06)}
+.card:first-child{margin-top:-12px}h2{font-size:16px;margin:0 0 6px}p{margin:6px 0}.lab{color:var(--mut);font-size:14px}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:12px 14px;width:100%;margin-top:8px;background:var(--brand);color:#fff}
+button.sec{background:transparent;color:var(--brand);border:1px solid var(--line)}button:disabled{opacity:.45}
+ul{list-style:none;padding:0;margin:6px 0}li{padding:6px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere;font-size:15px}li:last-child{border:0}
+.ok{color:var(--ok);font-weight:700}.ko{color:var(--ko);font-weight:700}
+</style>
+</head>
+<body>
+<header><div><b>Trésor</b><h1>Test : sauvegarde dans un dossier du téléphone</h1></div></header>
+<main>
+<div class="card">
+<h2>À faire dans Chrome, dans l'ordre</h2>
+<p class="lab">1. Touche « Choisir un dossier », crée ou choisis <b>Documents › Trésor</b>, puis autorise.<br>
+2. Ferme complètement Chrome (balayer l'app dans les apps récentes), rouvre cette page et attends 40 secondes.<br>
+3. Touche « Copier le résultat » et colle-le dans la conversation.</p>
+<button id="choisir">Choisir un dossier</button>
+<button id="ecrire" class="sec" disabled>Écrire maintenant (avec un toucher)</button>
+<button id="copier" class="sec">Copier le résultat</button>
+</div>
+<div class="card"><h2>Résultat</h2><ul id="res"></ul></div>
+</main>
+<script>
+const res=document.getElementById('res'),journal=[];
+function note(ok,txt){const li=document.createElement('li');const t=new Date().toLocaleTimeString('fr-FR');
+  li.innerHTML=(ok===null?'• ':`<span class="${ok?'ok':'ko'}">${ok?'OK':'NON'}</span> `)+txt.replace(/</g,'&lt;')+` <span class="lab">${t}</span>`;
+  res.appendChild(li);journal.push(`[${t}] ${ok===null?'-':ok?'OK':'NON'} ${txt}`)}
+// Petit coffre IndexedDB pour garder le dossier choisi d'une ouverture à l'autre.
+const idb=()=>new Promise((r,j)=>{const q=indexedDB.open('test-dossier',1);q.onupgradeneeded=()=>q.result.createObjectStore('k');q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+async function lire(){const d=await idb();return new Promise(r=>{const q=d.transaction('k').objectStore('k').get('dossier');q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)})}
+async function garder(h){const d=await idb();return new Promise(r=>{const t=d.transaction('k','readwrite');t.objectStore('k').put(h,'dossier');t.oncomplete=r})}
+let dossier=null,auto=0;
+async function ecrire(origine){
+  const t0=performance.now();
+  // Fichier de 3 Mo, taille d'une base SQLite réaliste.
+  const data=new Uint8Array(3*1024*1024);for(let i=0;i<data.length;i+=4096)data[i]=i%251;
+  const f=await dossier.getFileHandle('tresor-test.sqlite',{create:true});const w=await f.createWritable();await w.write(data);await w.close();
+  const j=await dossier.getFileHandle('tresor-test.txt',{create:true});const w2=await j.createWritable();
+  await w2.write(`Dernière écriture : ${new Date().toLocaleString('fr-FR')} (${origine})\n`);await w2.close();
+  note(true,`Écriture ${origine} : 3 Mo en ${Math.round(performance.now()-t0)} ms`)}
+async function essai(origine){try{await ecrire(origine)}catch(e){note(false,`Écriture ${origine} : ${e.name} — ${e.message}`)}}
+async function demarrer(){
+  const m=navigator.userAgent.match(/Chrome\/([\d.]+)/);note(null,`Navigateur : ${m?'Chrome '+m[1]:navigator.userAgent}`);
+  note(null,`Mode : ${matchMedia('(display-mode: standalone)').matches||document.referrer.startsWith('android-app://')?'app installée':'onglet Chrome'}`);
+  const ok='showDirectoryPicker' in window;note(ok,'Choix d\'un dossier (showDirectoryPicker) disponible');
+  note('showSaveFilePicker' in window,'Choix d\'un fichier (showSaveFilePicker) disponible');
+  if(!ok){document.getElementById('choisir').disabled=true;return}
+  try{dossier=await lire()}catch(e){note(false,'IndexedDB : '+e.message)}
+  if(!dossier){note(null,'Aucun dossier gardé : touche « Choisir un dossier ».');return}
+  note(true,`Dossier gardé après réouverture : « ${dossier.name} »`);document.getElementById('ecrire').disabled=false;
+  const p=await dossier.queryPermission({mode:'readwrite'});note(p==='granted',`Autorisation au démarrage : ${p}`);
+  if(p==='granted'){await essai('automatique au démarrage');
+    const id=setInterval(async()=>{auto++;await essai(`automatique n°${auto} (30 s)`);if(auto>=2)clearInterval(id)},30000)}
+  else note(null,'L\'autorisation n\'est pas gardée : il faudrait un toucher à chaque ouverture. Essaie « Écrire maintenant ».')}
+document.getElementById('choisir').onclick=async()=>{
+  try{dossier=await showDirectoryPicker({id:'tresor',mode:'readwrite',startIn:'documents'});await garder(dossier);
+    note(true,`Dossier choisi : « ${dossier.name} » (gardé pour la prochaine ouverture)`);document.getElementById('ecrire').disabled=false;await essai('après le choix')}
+  catch(e){note(false,`Choix du dossier : ${e.name} — ${e.message}`)}};
+document.getElementById('ecrire').onclick=async()=>{
+  try{let p=await dossier.queryPermission({mode:'readwrite'});if(p!=='granted')p=await dossier.requestPermission({mode:'readwrite'});
+    note(p==='granted',`Autorisation après un toucher : ${p}`);if(p==='granted')await essai('avec un toucher')}
+  catch(e){note(false,`${e.name} — ${e.message}`)}};
+document.getElementById('copier').onclick=async()=>{const txt=journal.join('\n');
+  try{await navigator.clipboard.writeText(txt);note(null,'Résultat copié.')}catch{prompt('Copie ce texte :',txt)}};
+demarrer();
+</script>
+</body>
+</html>
